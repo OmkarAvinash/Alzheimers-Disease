@@ -8,7 +8,6 @@ from sklearn.model_selection import RandomizedSearchCV
 from sklearn.svm import SVC
 from sklearn.model_selection import cross_val_score
 from sklearn.impute  import SimpleImputer
-import xgboost as xgb
 from sklearn import metrics
 
 import warnings
@@ -29,6 +28,9 @@ df['Group'] = df['Group'].replace(['Converted'], ['Demented'])
 df.drop(['Subject ID'], axis = 1, inplace = True, errors = 'ignore')
 df.drop(['MRI ID'], axis = 1, inplace = True, errors = 'ignore')
 df.drop(['Visit'], axis = 1, inplace = True, errors = 'ignore')
+df.drop(['Hand'], axis = 1, inplace = True, errors = 'ignore')
+df.drop(['MR Delay'], axis = 1, inplace = True, errors = 'ignore')
+
 
 #LabelEncoder
 #****We are going to use Binarized LabelEncoder for our Binary attributes****#
@@ -37,17 +39,6 @@ df['Group'] = df['Group'].replace(['Demented', 'Nondemented'], [1,0])
 
 # 1= M, 0 = F
 df['M/F'] = df['M/F'].replace(['M', 'F'], [1,0])  
-
-from sklearn.preprocessing import LabelEncoder
-encoder=LabelEncoder()
-encoder.fit(df.Hand.values)
-list(encoder.classes_)
-#Transoformamos
-encoder.transform(df.Hand.values)
-df[['Hand']]=encoder.transform(df.Hand.values)
-encoder2=LabelEncoder()
-encoder2.fit(df.Hand.values)
-list(encoder2.classes_)
 
 #Imputation of lost values
 data_na = (df.isnull().sum() / len(df)) * 100
@@ -68,11 +59,6 @@ from sklearn.preprocessing import StandardScaler
 df_norm = df
 scaler = StandardScaler()
 df_norm[['Age','MR Delay','M/F','Hand','EDUC','SES','MMSE','eTIV','nWBV','ASF']]=scaler.fit_transform(df[['Age','MR Delay','M/F','Hand','EDUC','SES','MMSE','eTIV','nWBV','ASF']])
-
-# Remove Columns selected by boruta
-df.drop(['Hand'], axis = 1, inplace = True, errors = 'ignore')
-df.drop(['MR Delay'], axis = 1, inplace = True, errors = 'ignore')
-
 
 #**********Modeling**********
 data_test = df
@@ -164,34 +150,12 @@ svm_random = GridSearchCV(model_svm, parametros_svm,  cv = 20,
                                verbose=2, n_jobs = -1, scoring='roc_auc')
 svm_random.fit(X, y)
 
-#**  xgboost  **
-param_xgb = {
-        'silent': [False],
-        'max_depth': [6, 10, 15, 20],
-        'learning_rate': [0.001, 0.01, 0.1, 0.2, 0,3],
-        'subsample': [0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
-        'colsample_bytree': [0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
-        'colsample_bylevel': [0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
-        'min_child_weight': [0.5, 1.0, 3.0, 5.0, 7.0, 10.0],
-        'gamma': [0, 0.25, 0.5, 1.0],
-        'reg_lambda': [0.1, 1.0, 5.0, 10.0, 50.0, 100.0],
-        'n_estimators': [50,100,120]}
-from sklearn.model_selection import GridSearchCV
-
-model_xgb = xgb.XGBClassifier()
-xgb_random = RandomizedSearchCV(estimator = model_xgb, param_distributions = param_xgb, n_iter = 100, cv = FOLDS, 
-                               verbose=2, random_state=42, n_jobs = -1, scoring='roc_auc')
-xgb_random.fit(X_train.values, y_train)
-
-
 #** Generating our models **
 model_rf = forest_random.best_estimator_
 model_et = et_random.best_estimator_
 model_ada = ada_random.best_estimator_
 model_gb = gb_random.best_estimator_
 model_svc = svm_random.best_estimator_
-model_xgb= xgb_random.best_estimator_
-
 
 # Creating a pickle file for the classifier
 filename = 'model_rf.pkl'
@@ -209,9 +173,6 @@ pickle.dump(model_gb , open(filename, 'wb'))
 filename = 'model_svc.pkl'
 pickle.dump(model_svc, open(filename, 'wb'))
 
-filename = 'model_xgb.pkl'
-pickle.dump(model_xgb, open(filename, 'wb'))
-
 
 #** Predictions  **
 Predicted_rf= model_rf.predict(X_test)
@@ -219,7 +180,6 @@ Predicted_ada = model_ada.predict(X_test)
 Predicted_gb = model_gb.predict(X_test)
 Predicted_et = model_et.predict(X_test)
 Predicted_svm= model_svc.predict(X_test)
-Predicted_xgb= model_xgb.predict(X_test.values)
 
 #** Performance Metric for each model  **
 acc=[]
@@ -258,12 +218,6 @@ fpr, tpr, thresholds = roc_curve(y_test, Predicted_svm, pos_label=1)
 test_auc = auc(fpr, tpr)
 acc.append([model, test_score, test_recall, test_auc, fpr, tpr, thresholds])
 
-model='Xgboost'
-test_score = cross_val_score(model_xgb, X_train, y_train, cv=FOLDS, scoring='accuracy').mean() # Get recall for each parameter setting
-test_recall = recall_score(y_test, Predicted_xgb, pos_label=1)
-fpr, tpr, thresholds = roc_curve(y_test, Predicted_xgb, pos_label=1)
-test_auc = auc(fpr, tpr)
-acc.append([model,test_score, test_recall, test_auc, fpr, tpr, thresholds])
 
 #** Report **
 def report_performance(model):
@@ -281,7 +235,6 @@ report_performance(model_ada)
 report_performance(model_gb)
 report_performance(model_et)
 report_performance(model_svc)
-report_performance(model_xgb)
 
 #** Results **
 result = pd.DataFrame(acc, columns=['Model', 'Accuracy', 'Recall', 'AUC', 'FPR', 'TPR', 'TH'])
