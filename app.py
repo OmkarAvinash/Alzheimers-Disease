@@ -19,8 +19,6 @@ filename=str("model_gb.pkl")
 classifier4=pickle.load(open(filename, 'rb'))
 filename=str("model_svc.pkl")
 classifier5=pickle.load(open(filename, 'rb'))
-filename=str("model_xgb.pkl")
-classifier6=pickle.load(open(filename, 'rb'))
 
 app=Flask(__name__)
 
@@ -57,9 +55,6 @@ def predict():
         #a=classifier5.predict(data)
         #a=a.tolist()
         my_prediction.append(0)
-        a=classifier6.predict(data)
-        a=a.tolist()
-        my_prediction.append(a[0])
         return render_template('results.html', prediction=mode(my_prediction))
 
 if __name__ == '__main__':
